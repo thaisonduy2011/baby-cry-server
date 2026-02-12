@@ -121,7 +121,16 @@ async def telegram_webhook(request: Request):
         send_telegram("Xóa tin nhắn thủ công trong Telegram (bot không thể tự xóa toàn bộ).")
 
     elif text == "/today":
-        send_telegram("Xem lịch sử trong Google Sheets: BabyCryLogs")
+    times = read_today_from_sheet()
+
+    if not times:
+        send_telegram("Hôm nay chưa có lần khóc nào.")
+    else:
+        msg = f"HÔM NAY BÉ KHÓC {len(times)} LẦN:\n"
+        for i, t in enumerate(times, 1):
+            msg += f"{i}. {t}\n"
+        send_telegram(msg)
+
 
     else:
         send_telegram("Lệnh hợp lệ:\n/start\n/stop\n/status\n/today")
