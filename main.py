@@ -1,11 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from datetime import datetime, date, timezone, timedelta
 from database import engine, SessionLocal
-from models import CrySession, Base
+from models import CryLog, Base
 import requests
 import os
 
-# ====== SETUP ======
+# ===== SETUP =====
 Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
@@ -13,102 +13,99 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
 VN_TZ = timezone(timedelta(hours=7))
+SYSTEM_ENABLED = False  # ban đầu TẮT
 
-current_session_id = None  # lưu trạng thái đang khóc
 
-
-# ====== TELEGRAM ======
-def send_telegram(text: str):
-    if not TELEGRAM_TOKEN or not CHAT_ID:
+# ===== TELEGRAM UTILS =====
+def send_telegram(chat_id, text):
+    if not TELEGRAM_TOKEN:
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     requests.post(url, json={
-        "chat_id": CHAT_ID,
+        "chat_id": chat_id,
         "text": text
     })
 
 
-# ====== API ======
+# ===== BASIC =====
 @app.get("/")
 def home():
-    return {"status": "Server is running"}
+    return {
+        "status": "Server is running",
+        "system_enabled": SYSTEM_ENABLED
+    }
 
 
-@app.post("/cry/start")
-def cry_start():
-    global current_session_id
+# ===== ESP32 GỌI KHI PHÁT HIỆN KHÓC =====
+@app.post("/alert")
+def alert():
+    global SYSTEM_ENABLED
+
+    if not SYSTEM_ENABLED:
+        return {"success": False, "reason": "system stopped"}
+
     db = SessionLocal()
-
-    if current_session_id is not None:
-        db.close()
-        return {"status": "already crying"}
-
     now = datetime.now(VN_TZ)
 
-    session = CrySession(start_time=now)
-    db.add(session)
+    log = CryLog()
+    db.add(log)
     db.commit()
-    db.refresh(session)
-
-    current_session_id = session.id
     db.close()
 
     send_telegram(
-        "🚨 BÉ BẮT ĐẦU KHÓC\n"
+        CHAT_ID,
+        "🚨 BÉ ĐANG KHÓC\n"
         f"🕒 Thời gian: {now.strftime('%H:%M:%S %d/%m/%Y')}"
     )
 
-    return {"status": "cry started"}
+    return {"success": True}
 
 
-@app.post("/cry/stop")
-def cry_stop():
-    global current_session_id
+# ===== TELEGRAM WEBHOOK =====
+@app.post("/telegram")
+async def telegram_webhook(request: Request):
+    global SYSTEM_ENABLED
+
+    data = await request.json()
+
+    if "message" not in data:
+        return {"ok": True}
+
+    text = data["message"].get("text", "")
+    chat_id = data["message"]["chat"]["id"]
+
     db = SessionLocal()
+    now = datetime.now(VN_TZ)
 
-    if current_session_id is None:
-        db.close()
-        return {"status": "not crying"}
+    # /start
+    if text == "/start":
+        SYSTEM_ENABLED = True
+        send_telegram(chat_id, "▶️ HỆ THỐNG ĐÃ BẬT")
 
-    session = db.query(CrySession).get(current_session_id)
-    session.end_time = datetime.now(VN_TZ)
-    db.commit()
+    # /stop
+    elif text == "/stop":
+        SYSTEM_ENABLED = False
+        send_telegram(chat_id, "⛔ HỆ THỐNG ĐÃ TẮT")
 
-    duration = (session.end_time - session.start_time).total_seconds()
-    minutes = round(duration / 60, 2)
+    # /today
+    elif text == "/today":
+        today = date.today()
+        logs = db.query(CryLog).filter(
+            CryLog.created_at >= datetime(today.year, today.month, today.day, tzinfo=VN_TZ)
+        ).all()
 
-    send_telegram(
-        "✅ BÉ NGỪNG KHÓC\n"
-        f"⏳ Thời gian khóc: {minutes} phút"
-    )
+        if not logs:
+            reply = "📭 Hôm nay chưa có lần khóc nào."
+        else:
+            reply = f"📅 HÔM NAY BÉ KHÓC {len(logs)} LẦN:\n"
+            for i, log in enumerate(logs, 1):
+                t = log.created_at.strftime("%H:%M:%S")
+                reply += f"{i}. {t}\n"
 
-    current_session_id = None
-    db.close()
+        send_telegram(chat_id, reply)
 
-    return {"status": "cry stopped"}
-
-
-@app.get("/today")
-def today_stats():
-    db = SessionLocal()
-    today = date.today()
-
-    sessions = db.query(CrySession).filter(
-        CrySession.start_time >= datetime(today.year, today.month, today.day, tzinfo=VN_TZ)
-    ).all()
-
-    count = len(sessions)
-    total_seconds = 0
-
-    for s in sessions:
-        if s.end_time:
-            total_seconds += (s.end_time - s.start_time).total_seconds()
+    else:
+        send_telegram(chat_id, "❓ Lệnh không hợp lệ\n/start /stop /today")
 
     db.close()
-
-    return {
-        "date": str(today),
-        "cry_count": count,
-        "total_cry_time_seconds": int(total_seconds),
-        "total_cry_time_minutes": round(total_seconds / 60, 2)
-    }
+    return {"ok": True}
