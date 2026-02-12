@@ -16,46 +16,56 @@ GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS")
 
 VN_TZ = timezone(timedelta(hours=7))
 
-# DÙNG 1 TÊN DUY NHẤT
 SYSTEM_ENABLED = False
 
 
 # ===== TELEGRAM =====
 def send_telegram(text):
     if not TELEGRAM_TOKEN or not CHAT_ID:
-        print("Missing TELEGRAM_TOKEN or CHAT_ID")
+        print("❌ Missing TELEGRAM_TOKEN or CHAT_ID")
         return
 
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    requests.post(url, json={
-        "chat_id": CHAT_ID,
-        "text": text
-    })
+
+    try:
+        r = requests.post(url, json={
+            "chat_id": CHAT_ID,
+            "text": text
+        })
+        print("Telegram status:", r.status_code)
+    except Exception as e:
+        print("Telegram error:", e)
 
 
 # ===== GOOGLE SHEET =====
 def write_google_sheet():
     if not GOOGLE_CREDENTIALS:
-        print("Missing GOOGLE_CREDENTIALS")
+        print("❌ Missing GOOGLE_CREDENTIALS")
         return
 
-    scope = [
-        "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/drive",
-    ]
+    try:
+        scope = [
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/drive",
+        ]
 
-    creds_dict = json.loads(GOOGLE_CREDENTIALS)
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    client = gspread.authorize(creds)
+        creds_dict = json.loads(GOOGLE_CREDENTIALS)
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        client = gspread.authorize(creds)
 
-    sheet = client.open("BabyCryLogs").sheet1
+        sheet = client.open("BabyCryLogs").sheet1
 
-    now = datetime.now(VN_TZ)
+        now = datetime.now(VN_TZ)
 
-    sheet.append_row([
-        now.strftime("%Y-%m-%d"),
-        now.strftime("%H:%M:%S")
-    ])
+        sheet.append_row([
+            now.strftime("%Y-%m-%d"),
+            now.strftime("%H:%M:%S")
+        ])
+
+        print("✅ Google Sheet write success")
+
+    except Exception as e:
+        print("❌ Google Sheet error:", e)
 
 
 # ===== HOME =====
@@ -75,13 +85,9 @@ def alert():
     if not SYSTEM_ENABLED:
         return {"success": False, "reason": "system stopped"}
 
-    print("ALERT RECEIVED")
+    print("🚨 ALERT RECEIVED")
 
-    try:
-        write_google_sheet()
-        print("WRITE SHEET SUCCESS")
-    except Exception as e:
-        print("GOOGLE SHEET ERROR:", e)
+    write_google_sheet()
 
     send_telegram(
         f"BÉ ĐANG KHÓC\nThời gian: {datetime.now(VN_TZ).strftime('%H:%M:%S')}"
@@ -104,16 +110,23 @@ async def telegram_webhook(request: Request):
 
     if text == "/start":
         SYSTEM_ENABLED = True
-        send_telegram("HỆ THỐNG ĐÃ BẬT")
+        send_telegram("🟢 HỆ THỐNG ĐÃ BẬT")
 
     elif text == "/stop":
         SYSTEM_ENABLED = False
-        send_telegram("HỆ THỐNG ĐÃ TẮT")
+        send_telegram("🔴 HỆ THỐNG ĐÃ TẮT")
+
+    elif text == "/status":
+        status_text = "🟢 ĐANG BẬT" if SYSTEM_ENABLED else "🔴 ĐANG TẮT"
+        send_telegram(f"Trạng thái hiện tại: {status_text}")
+
+    elif text == "/clear":
+        send_telegram("Xóa tin nhắn thủ công trong Telegram (bot không thể tự xóa toàn bộ).")
 
     elif text == "/today":
         send_telegram("Xem lịch sử trong Google Sheets: BabyCryLogs")
 
     else:
-        send_telegram("Lệnh hợp lệ:\n/start\n/stop\n/today")
+        send_telegram("Lệnh hợp lệ:\n/start\n/stop\n/status\n/today")
 
     return {"ok": True}
