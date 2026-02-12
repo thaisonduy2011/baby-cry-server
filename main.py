@@ -97,7 +97,7 @@ async def telegram_webhook(request: Request):
         if not logs:
             reply = "📭 Hôm nay chưa có lần khóc nào."
         else:
-            reply = f"📅 HÔM NAY BÉ KHÓC {len(logs)} LẦN:\n"
+            reply = f"HÔM NAY BÉ KHÓC {len(logs)} LẦN:\n"
             for i, log in enumerate(logs, 1):
                 t = log.created_at.strftime("%H:%M:%S")
                 reply += f"{i}. {t}\n"
