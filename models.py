@@ -1,9 +1,11 @@
 from sqlalchemy import Column, Integer, DateTime
 from database import Base
+from datetime import datetime, timezone, timedelta
 
-class CrySession(Base):
-    __tablename__ = "cry_sessions"
+VN_TZ = timezone(timedelta(hours=7))
+
+class CryLog(Base):
+    __tablename__ = "cry_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    start_time = Column(DateTime, nullable=False)
-    end_time = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(VN_TZ))
