@@ -71,6 +71,9 @@ def home():
         "status": "running",
         "system_enabled": SYSTEM_ENABLED
     }
+@app.head("/")
+def head_home():
+    return {"ok": True}
 
 
 # ===== ALERT =====
