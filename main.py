@@ -64,7 +64,6 @@ def read_today_from_sheet():
     return times
 
 
-
 # ===== HOME =====
 @app.get("/")
 def home():
@@ -83,8 +82,6 @@ def alert():
         return {"success": False, "reason": "system stopped"}
 
     print("🚨 ALERT RECEIVED")
-
-    write_google_sheet()
 
     send_telegram(
         f"BÉ ĐANG KHÓC\nThời gian: {datetime.now(VN_TZ).strftime('%H:%M:%S')}"
@@ -118,19 +115,18 @@ async def telegram_webhook(request: Request):
         send_telegram(f"Trạng thái hiện tại: {status_text}")
 
     elif text == "/clear":
-        send_telegram("Xóa tin nhắn thủ công trong Telegram (bot không thể tự xóa toàn bộ).")
+        send_telegram("Xóa tin nhắn thủ công trong Telegram.")
 
     elif text == "/today":
-    times = read_today_from_sheet()
+        times = read_today_from_sheet()
 
-    if not times:
-        send_telegram("Hôm nay chưa có lần khóc nào.")
-    else:
-        msg = f"HÔM NAY BÉ KHÓC {len(times)} LẦN:\n"
-        for i, t in enumerate(times, 1):
-            msg += f"{i}. {t}\n"
-        send_telegram(msg)
-
+        if not times:
+            send_telegram("Hôm nay chưa có lần khóc nào.")
+        else:
+            msg = f"HÔM NAY BÉ KHÓC {len(times)} LẦN:\n"
+            for i, t in enumerate(times, 1):
+                msg += f"{i}. {t}\n"
+            send_telegram(msg)
 
     else:
         send_telegram("Lệnh hợp lệ:\n/start\n/stop\n/status\n/today")
