@@ -38,34 +38,31 @@ def send_telegram(text):
 
 
 # ===== GOOGLE SHEET =====
-def write_google_sheet():
+def read_today_from_sheet():
     if not GOOGLE_CREDENTIALS:
-        print("❌ Missing GOOGLE_CREDENTIALS")
-        return
+        return []
 
-    try:
-        scope = [
-            "https://spreadsheets.google.com/feeds",
-            "https://www.googleapis.com/auth/drive",
-        ]
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive",
+    ]
 
-        creds_dict = json.loads(GOOGLE_CREDENTIALS)
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-        client = gspread.authorize(creds)
+    creds_dict = json.loads(GOOGLE_CREDENTIALS)
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    client = gspread.authorize(creds)
 
-        sheet = client.open("BabyCryLogs").sheet1
+    sheet = client.open("BabyCryLogs").sheet1
+    rows = sheet.get_all_values()[1:]  # bỏ header
 
-        now = datetime.now(VN_TZ)
+    today = datetime.now(VN_TZ).strftime("%Y-%m-%d")
+    times = []
 
-        sheet.append_row([
-            now.strftime("%Y-%m-%d"),
-            now.strftime("%H:%M:%S")
-        ])
+    for row in rows:
+        if len(row) >= 2 and row[0] == today:
+            times.append(row[1])
 
-        print("✅ Google Sheet write success")
+    return times
 
-    except Exception as e:
-        print("❌ Google Sheet error:", e)
 
 
 # ===== HOME =====
