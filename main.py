@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request
-from datetime import datetime, date, timezone, timedelta
+from datetime import datetime, timezone, timedelta
 import requests
 import os
 import json
@@ -7,29 +7,38 @@ import json
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-# ====== APP ======
 app = FastAPI()
 
-# ====== ENV ======
+# ===== ENV =====
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS")
 
 VN_TZ = timezone(timedelta(hours=7))
-SYSTEM_ENABLED = False  # mặc định tắt
 
-# ====== TELEGRAM ======
-def send_telegram(chat_id, text):
-    if not TELEGRAM_TOKEN:
+# DÙNG 1 TÊN DUY NHẤT
+SYSTEM_ENABLED = False
+
+
+# ===== TELEGRAM =====
+def send_telegram(text):
+    if not TELEGRAM_TOKEN or not CHAT_ID:
+        print("Missing TELEGRAM_TOKEN or CHAT_ID")
         return
+
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     requests.post(url, json={
-        "chat_id": chat_id,
+        "chat_id": CHAT_ID,
         "text": text
     })
 
-# ====== GOOGLE SHEET ======
+
+# ===== GOOGLE SHEET =====
 def write_google_sheet():
+    if not GOOGLE_CREDENTIALS:
+        print("Missing GOOGLE_CREDENTIALS")
+        return
+
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
@@ -42,20 +51,23 @@ def write_google_sheet():
     sheet = client.open("BabyCryLogs").sheet1
 
     now = datetime.now(VN_TZ)
+
     sheet.append_row([
         now.strftime("%Y-%m-%d"),
         now.strftime("%H:%M:%S")
     ])
 
-# ====== BASIC ======
+
+# ===== HOME =====
 @app.get("/")
 def home():
     return {
-        "status": "Server is running",
+        "status": "running",
         "system_enabled": SYSTEM_ENABLED
     }
 
-# ====== ESP32 / TEST TAY ======
+
+# ===== ALERT =====
 @app.post("/alert")
 def alert():
     global SYSTEM_ENABLED
@@ -63,24 +75,22 @@ def alert():
     if not SYSTEM_ENABLED:
         return {"success": False, "reason": "system stopped"}
 
-    print("=== ALERT RECEIVED ===")
+    print("ALERT RECEIVED")
 
     try:
-        print("=== TRY WRITE GOOGLE SHEET ===")
         write_google_sheet()
-        print("=== WRITE GOOGLE SHEET SUCCESS ===")
+        print("WRITE SHEET SUCCESS")
     except Exception as e:
-        print("!!! GOOGLE SHEET ERROR !!!")
-        print(e)
+        print("GOOGLE SHEET ERROR:", e)
 
     send_telegram(
-        CHAT_ID,
         f"BÉ ĐANG KHÓC\nThời gian: {datetime.now(VN_TZ).strftime('%H:%M:%S')}"
     )
 
     return {"success": True}
 
-# ====== TELEGRAM WEBHOOK ======
+
+# ===== TELEGRAM WEBHOOK =====
 @app.post("/telegram")
 async def telegram_webhook(request: Request):
     global SYSTEM_ENABLED
@@ -91,23 +101,19 @@ async def telegram_webhook(request: Request):
         return {"ok": True}
 
     text = data["message"].get("text", "")
-    chat_id = data["message"]["chat"]["id"]
 
-    # /start
     if text == "/start":
         SYSTEM_ENABLED = True
-        send_telegram(chat_id, "HỆ THỐNG ĐÃ BẬT")
+        send_telegram("HỆ THỐNG ĐÃ BẬT")
 
-    # /stop
     elif text == "/stop":
         SYSTEM_ENABLED = False
-        send_telegram(chat_id, "HỆ THỐNG ĐÃ TẮT")
+        send_telegram("HỆ THỐNG ĐÃ TẮT")
 
-    # /today
     elif text == "/today":
-        send_telegram(chat_id, "Xem lịch sử trong Google Sheets: BabyCryLogs")
+        send_telegram("Xem lịch sử trong Google Sheets: BabyCryLogs")
 
     else:
-        send_telegram(chat_id, "Lệnh hợp lệ:\n/start\n/stop\n/today")
+        send_telegram("Lệnh hợp lệ:\n/start\n/stop\n/today")
 
     return {"ok": True}
