@@ -39,23 +39,43 @@ def home():
 # ===== ESP32 GỌI KHI PHÁT HIỆN KHÓC =====
 @app.post("/alert")
 def alert():
-    global SYSTEM_ENABLED
+    global system_enabled
 
-    if not SYSTEM_ENABLED:
+    if not system_enabled:
         return {"success": False, "reason": "system stopped"}
 
-    db = SessionLocal()
-    now = datetime.now(VN_TZ)
+    print("=== ALERT RECEIVED ===")
 
-    log = CryLog()
-    db.add(log)
-    db.commit()
-    db.close()
+    # ===== GHI GOOGLE SHEET =====
+    try:
+        print("=== TRY WRITE GOOGLE SHEET ===")
 
+        scope = [
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/drive",
+        ]
+
+        credentials_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(credentials_dict, scope)
+        client = gspread.authorize(creds)
+
+        sheet = client.open("BabyCryLogs").sheet1
+
+        now = datetime.now()
+        date = now.strftime("%Y-%m-%d")
+        time = now.strftime("%H:%M:%S")
+
+        sheet.append_row([date, time])
+
+        print("=== WRITE GOOGLE SHEET SUCCESS ===")
+
+    except Exception as e:
+        print("!!! GOOGLE SHEET ERROR !!!")
+        print(e)
+
+    # ===== TELEGRAM =====
     send_telegram(
-        CHAT_ID,
-        "🚨 BÉ ĐANG KHÓC\n"
-        f"🕒 Thời gian: {now.strftime('%H:%M:%S %d/%m/%Y')}"
+        f"BÉ ĐANG KHÓC\nThời gian: {datetime.now().strftime('%H:%M:%S')}"
     )
 
     return {"success": True}
