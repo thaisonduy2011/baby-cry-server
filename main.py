@@ -14,7 +14,7 @@ def home():
 @app.post("/alert")
 async def alert(request: Request):
     data = await request.json()
-    message = data.get("message", "Baby Cry Detected!")
+    message = f"🚨 PHÁT HIỆN TIẾNG KHÓC\n\nMức âm: {level}\nThời gian: {time}"
 
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     requests.post(url, json={
