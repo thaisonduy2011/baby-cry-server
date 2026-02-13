@@ -37,31 +37,67 @@ def send_telegram(text):
         print("Telegram error:", e)
 
 
-# ===== GOOGLE SHEET =====
+# ===== GOOGLE SHEET WRITE =====
+def append_to_sheet():
+    try:
+        if not GOOGLE_CREDENTIALS:
+            print("❌ GOOGLE_CREDENTIALS missing")
+            return
+
+        scope = [
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/drive",
+        ]
+
+        creds_dict = json.loads(GOOGLE_CREDENTIALS)
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        client = gspread.authorize(creds)
+
+        sheet = client.open("BabyCryLogs").sheet1
+
+        now = datetime.now(VN_TZ)
+
+        sheet.append_row([
+            now.strftime("%Y-%m-%d"),
+            now.strftime("%H:%M:%S")
+        ])
+
+        print("✅ Logged to Google Sheet")
+
+    except Exception as e:
+        print("❌ Google Sheet error:", e)
+
+
+# ===== GOOGLE SHEET READ =====
 def read_today_from_sheet():
-    if not GOOGLE_CREDENTIALS:
+    try:
+        if not GOOGLE_CREDENTIALS:
+            return []
+
+        scope = [
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/drive",
+        ]
+
+        creds_dict = json.loads(GOOGLE_CREDENTIALS)
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        client = gspread.authorize(creds)
+
+        sheet = client.open("BabyCryLogs").sheet1
+        rows = sheet.get_all_values()[1:]
+
+        today = datetime.now(VN_TZ).strftime("%Y-%m-%d")
+        times = []
+
+        for row in rows:
+            if len(row) >= 2 and row[0] == today:
+                times.append(row[1])
+
+        return times
+
+    except Exception as e:
+        print("❌ Google Sheet read error:", e)
         return []
-
-    scope = [
-        "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/drive",
-    ]
-
-    creds_dict = json.loads(GOOGLE_CREDENTIALS)
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    client = gspread.authorize(creds)
-
-    sheet = client.open("BabyCryLogs").sheet1
-    rows = sheet.get_all_values()[1:]  # bỏ header
-
-    today = datetime.now(VN_TZ).strftime("%Y-%m-%d")
-    times = []
-
-    for row in rows:
-        if len(row) >= 2 and row[0] == today:
-            times.append(row[1])
-
-    return times
 
 
 # ===== HOME =====
@@ -71,6 +107,8 @@ def home():
         "status": "running",
         "system_enabled": SYSTEM_ENABLED
     }
+
+
 @app.head("/")
 def head_home():
     return {"ok": True}
@@ -86,9 +124,13 @@ def alert():
 
     print("🚨 ALERT RECEIVED")
 
+    now = datetime.now(VN_TZ)
+
     send_telegram(
-        f"BÉ ĐANG KHÓC\nThời gian: {datetime.now(VN_TZ).strftime('%H:%M:%S')}"
+        f"BÉ ĐANG KHÓC\nThời gian: {now.strftime('%H:%M:%S')}"
     )
+
+    append_to_sheet()
 
     return {"success": True}
 
@@ -116,9 +158,6 @@ async def telegram_webhook(request: Request):
     elif text == "/status":
         status_text = "🟢 ĐANG BẬT" if SYSTEM_ENABLED else "🔴 ĐANG TẮT"
         send_telegram(f"Trạng thái hiện tại: {status_text}")
-
-    elif text == "/clear":
-        send_telegram("Xóa tin nhắn thủ công trong Telegram.")
 
     elif text == "/today":
         times = read_today_from_sheet()
