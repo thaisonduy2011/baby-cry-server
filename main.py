@@ -23,9 +23,9 @@ SYSTEM_ENABLED = False
 # =========================
 # PLAN C — Best simple defaults
 # =========================
-BURST_WINDOW_SECONDS = 30          # khẩn cấp trong 30s đầu
-BURST_NOTIFY_EVERY_SECONDS = 5     # nhắn mỗi 5s trong 30s đầu
-QUIET_RESET_SECONDS = 25           # im >= 25s => coi như ngưng, lần sau là đợt mới
+BURST_WINDOW_SECONDS = 60          # khẩn cấp trong 30s đầu
+BURST_NOTIFY_EVERY_SECONDS = 8     # nhắn mỗi 5s trong 30s đầu
+QUIET_RESET_SECONDS = 10           # im >= 25s => coi như ngưng, lần sau là đợt mới
 MIN_ALERT_GAP_SECONDS = 1          # lọc nhiễu: bỏ qua alert lặp < 1s
 
 # Google Sheet name (bạn dùng đúng cái này)
