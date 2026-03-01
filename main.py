@@ -137,7 +137,7 @@ def save_system_state(enabled: bool):
     """Ghi trạng thái bật/tắt vào sheet để sống qua restart."""
     try:
         st = get_state_sheet()
-        st.update("A1", "1" if enabled else "0")
+        st.update([["1" if enabled else "0"]], "A1")
     except Exception as e:
         print(f"⚠️ Could not save state to sheet: {e}")
         reset_sheet_cache()
